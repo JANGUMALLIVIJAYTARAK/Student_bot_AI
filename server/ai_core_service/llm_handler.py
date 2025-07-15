@@ -229,13 +229,13 @@ def generate_sub_queries(original_query: str, llm_provider: str, num_queries: in
         return []
 
 # Function refactored to use PromptManager
-def generate_response(llm_provider: str, query: str, context_text: str, **kwargs) -> tuple[str, str | None]:
+def generate_response(llm_provider: str, query: str, context_text: str, prompt_key: str = 'synthesis', **kwargs) -> tuple[str, str | None]:
     """
     Generates a RAG-based response using a context-aware prompt.
     """
     logger.info(f"Generating RAG response with provider: {llm_provider}.")
     final_prompt = prompts.get(
-        'synthesis',
+        prompt_key,
         query=query,
         context_text=context_text
     )
@@ -260,9 +260,9 @@ def perform_document_analysis(document_text: str, analysis_type: str, llm_provid
     return analysis_result, None
 
 # Function refactored to use PromptManager
-def generate_report_from_text(topic: str, context_text: str, llm_provider: str, **kwargs) -> str | None:
+def generate_report_from_text(topic: str, context_text: str, llm_provider: str, **kwargs) -> dict | None:
     """
-    Generates a structured Markdown report exclusively from the provided topic and context.
+    Generates structured JSON data for a report from the provided topic and context.
     """
     logger.info(f"Generating structured report for topic '{topic}' using provider: {llm_provider}.")
     report_llm_provider = llm_provider or 'gemini'
@@ -273,8 +273,9 @@ def generate_report_from_text(topic: str, context_text: str, llm_provider: str, 
             topic=topic,
             context_text=context_text[:service_config.REPORT_MAX_CONTEXT_LENGTH]
         )
-        report_markdown = handler.generate_response(final_prompt, is_chat=False)
-        return report_markdown
+        report_json_str = handler.generate_response(final_prompt, is_chat=False)
+        report_data = json.loads(report_json_str)
+        return report_data
     except Exception as e:
         logger.error(f"Failed to generate report for topic '{topic}': {e}", exc_info=True)
         return None

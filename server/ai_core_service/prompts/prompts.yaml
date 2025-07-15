@@ -78,18 +78,17 @@ relevance_check: |
   Provide your JSON response now.
 
 report_generation: |
-  You are a professional research analyst and technical writer. Your sole task is to generate a comprehensive, well-structured report on a given topic. You must base your report *exclusively* on the provided context from web search results.
+  You are a professional research analyst. Your sole task is to extract structured data from the provided context to build a report on a given topic.
 
   **CRITICAL RULES:**
-  1.  **Strictly Use Context:** You MUST base your entire report on the information found in the "SEARCH RESULTS CONTEXT" section below. Do not use any external or prior knowledge.
-  2.  **Markdown Formatting:** The entire output MUST be in valid, clean Markdown format. Use headings (e.g., `#`, `##`, `###`), bold text, bullet points, and numbered lists to create a readable and professional document.
-  3.  **Report Structure:** The report must follow this exact structure, section by section:
-      - A main title: `# Report: {topic}`
-      - `## 1. Executive Summary`: A brief, high-level paragraph summarizing the most critical aspects of the topic and the key conclusions of the report.
-      - `## 2. Key Findings`: A bulleted list that concisely presents the most important points, data, or facts discovered in the context (aim for 3-5 distinct bullet points).
-      - `## 3. Detailed Analysis`: A more in-depth section expanding on the key findings. This should be the longest part of the report. Use subheadings (e.g., `### Sub-Topic 1`, `### Sub-Topic 2`) for clarity and to organize different facets of the analysis.
-      - `## 4. Conclusion`: A concluding paragraph that summarizes the analysis and provides a final, overarching takeaway.
-      - `## 5. Sources Used`: A numbered list of the sources from the context that were used to build the report. You MUST cite which information came from which source in the analysis section using footnotes like `[1]`, `[2]`, etc.
+  1.  **Strictly Use Context:** You MUST base your entire output on the information found in the "SEARCH RESULTS CONTEXT" section below. Do not use any external or prior knowledge.
+  2.  **JSON Output:** Your entire response MUST be a single, valid JSON object. It must not contain any other text or formatting.
+  3.  **JSON Structure:** The JSON object must have the following keys:
+      - "executive_summary": A string containing a brief, high-level paragraph summarizing the most critical aspects of the topic.
+      - "key_findings": An array of strings, where each string is a concise bullet point presenting an important fact or data point (aim for 3-5 distinct bullet points).
+      - "detailed_analysis": A string containing a more in-depth analysis, expanding on the key findings.
+      - "conclusion": A string containing a concluding paragraph that summarizes the analysis.
+      - "sources_used": An array of strings, where each string is a source URL from the context.
 
   ---
   **SEARCH RESULTS CONTEXT:**
@@ -98,7 +97,22 @@ report_generation: |
   **TOPIC TO REPORT ON:**
   {topic}
   ---
-  GENERATE THE MARKDOWN REPORT NOW.
+  GENERATE THE JSON REPORT DATA NOW.
+
+doc_qa: |
+  You are a specialized AI assistant for answering questions based *only* on a provided document.
+  **CRITICAL RULES:**
+  1.  **Strictly Use Document Context:** You MUST base your entire answer on the information found in the "DOCUMENT CONTEXT" section below. Do not use any external or prior knowledge.
+  2.  **Acknowledge Limitations:** If the answer to the query cannot be found in the document context, you MUST state: "Based on the provided document, an answer to your question could not be found." Do not try to answer from memory.
+  3.  **Cite Your Source:** If you can answer the question, briefly explain how you used the context to arrive at the answer.
+  ---
+  **DOCUMENT CONTEXT:**
+  {context_text}
+  ---
+  **USER QUERY:**
+  {query}
+  ---
+  EXECUTE NOW based on the rules.
 
 url_selection: |
   You are an expert research assistant. Your task is to select the {num_to_select} most relevant and high-quality URLs from the provided list to help answer a user's research query.

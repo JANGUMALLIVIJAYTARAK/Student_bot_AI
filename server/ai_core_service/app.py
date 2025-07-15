@@ -117,7 +117,7 @@ def generate_report_route():
         logger.info(f"Web search successful. Synthesizing report from {len(context_text)} characters of context.")
 
         # 2. Call the new handler function to generate the report from the context
-        report_markdown = llm_handler.generate_report_from_text(
+        report_data = llm_handler.generate_report_from_text(
             topic=topic,
             context_text=context_text,
             api_keys=data.get('api_keys', {}),
@@ -125,9 +125,21 @@ def generate_report_route():
             model_name=data.get('llm_model_name')
         )
         
-        if not report_markdown:
+        if not report_data:
             logger.error("Report generation returned empty content.")
             raise ValueError("The AI model failed to generate the report structure.")
+
+        # 3. Assemble the Markdown report from the structured data
+        report_markdown = f"# Report: {topic}\n\n"
+        report_markdown += f"## 1. Executive Summary\n{report_data.get('executive_summary', '')}\n\n"
+        report_markdown += "## 2. Key Findings\n"
+        for finding in report_data.get('key_findings', []):
+            report_markdown += f"- {finding}\n"
+        report_markdown += f"\n## 3. Detailed Analysis\n{report_data.get('detailed_analysis', '')}\n\n"
+        report_markdown += f"## 4. Conclusion\n{report_data.get('conclusion', '')}\n\n"
+        report_markdown += "## 5. Sources Used\n"
+        for source in report_data.get('sources_used', []):
+            report_markdown += f"- {source}\n"
 
         logger.info(f"Successfully generated Markdown report for topic: '{topic}'")
         return jsonify({"status": "success", "report_markdown": report_markdown})
@@ -244,7 +256,7 @@ def generate_chat_response_route():
             logger.info("No local documents found for this query.")
 
         # 3b. Fallback to Web Search if RAG yielded no context
-        if not context_text_for_llm:
+        if not context_text_for_llm and not sanitized_active_file:
             logger.info("RAG context is empty. Attempting web search fallback...")
             try:
                 web_context = web_search.perform_search(query=current_user_query, api_keys=data.get('api_keys', {}))
@@ -262,10 +274,17 @@ def generate_chat_response_route():
     
     # If there is any context, we use the standard response generator
     if context_text_for_llm:
-        logger.info(f"Generating response using context from: {context_source}")
-        final_answer, thinking_content = llm_handler.generate_response(
-            llm_provider=final_provider, query=current_user_query, context_text=context_text_for_llm, **handler_kwargs
-        )
+        if sanitized_active_file:
+             # Use the new doc_qa prompt
+            logger.info(f"Generating response using 'doc_qa' prompt for file: {sanitized_active_file}")
+            final_answer, thinking_content = llm_handler.generate_response(
+                llm_provider=final_provider, query=current_user_query, context_text=context_text_for_llm, prompt_key='doc_qa', **handler_kwargs
+            )
+        else:
+            logger.info(f"Generating response using context from: {context_source}")
+            final_answer, thinking_content = llm_handler.generate_response(
+                llm_provider=final_provider, query=current_user_query, context_text=context_text_for_llm, **handler_kwargs
+            )
     else:
         # If there is NO context from any source, we do a direct conversational call
         logger.info("No context available from any source. Generating direct conversational response.")
