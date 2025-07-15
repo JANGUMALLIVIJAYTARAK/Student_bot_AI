@@ -82,7 +82,8 @@ def perform_search(query: str, api_keys: dict, max_urls_to_scrape: int = 4) -> s
         # Use a fast LLM (Groq) to select the best URLs to scrape.
         logger.info("Using Groq LLM to select the most relevant URLs for scraping...")
         try:
-            triage_prompt = llm_handler._URL_SELECTION_PROMPT_TEMPLATE.format(
+            triage_prompt = llm_handler.prompts.get(
+                'url_selection',
                 num_to_select=max_urls_to_scrape,
                 topic=query,
                 search_results_text=search_results_text
