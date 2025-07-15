@@ -256,7 +256,7 @@ def generate_chat_response_route():
             logger.info("No local documents found for this query.")
 
         # 3b. Fallback to Web Search if RAG yielded no context
-        if not context_text_for_llm and not sanitized_active_file:
+        if not context_text_for_llm:
             logger.info("RAG context is empty. Attempting web search fallback...")
             try:
                 web_context = web_search.perform_search(query=current_user_query, api_keys=data.get('api_keys', {}))
