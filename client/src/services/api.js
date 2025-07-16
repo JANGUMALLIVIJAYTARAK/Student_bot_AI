@@ -72,7 +72,7 @@ export const getAcceptedUsers = () => apiClient.get('/admin/accepted');
 
 
 // --- CHAT & HISTORY ---
-export const sendMessage = (messageData) => apiClient.post('/chat/message', messageData, { timeout: 300000 });
+export const sendMessage = (messageData) => apiClient.post('/chat/message', messageData);
 export const saveChatHistory = (historyData) => apiClient.post('/chat/history', historyData);
 export const getChatSessions = () => apiClient.get('/chat/sessions');
 export const getSessionDetails = (sessionId) => apiClient.get(`/chat/session/${sessionId}`);
@@ -95,7 +95,6 @@ export const analyzeDocument = (analysisData) => apiClient.post('/analysis/docum
 export const generateReport = (topic, apiKeys) => {
     return apiClient.post('/generation/report', { topic, apiKeys }, {
         responseType: 'blob',
-        timeout: 300000,
     });
 };
 
