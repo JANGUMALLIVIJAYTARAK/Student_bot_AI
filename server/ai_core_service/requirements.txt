@@ -46,3 +46,13 @@ httpx                 # Modern HTTP client, supports async
 
 # Additional Dependencies for ai_core_service
 redis
+
+python-dotenv
+langchain
+langchain-openai
+langchain-groq
+
+# requirements.txt
+google-generativeai
+langchain-google-genai
+# pip install --upgrade langchain langchain-community
