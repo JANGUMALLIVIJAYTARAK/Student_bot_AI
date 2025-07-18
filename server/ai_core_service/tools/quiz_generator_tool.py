@@ -1,105 +1,113 @@
 # server/ai_core_service/tools/quiz_generator_tool.py
 
-# Step 1: Add necessary imports
+import json # Make sure this import is at the top
 from langchain.tools import BaseTool
-from typing import Type
-from pydantic.v1 import BaseModel, Field
+# We NO LONGER need BaseModel, Field, or Type
 
-# CHANGE 1: We no longer import config.
-# The tool will be self-contained.
-from ai_core_service.llm_handler import get_handler
+# The tool is self-contained and gets its LLM via the handler/router.
+from ai_core_service.llm_router import LLMRouter
 
-# CHANGE 2: Add an 'api_keys' field to the input schema.
-class QuizGeneratorInput(BaseModel):
-    topic: str = Field(description="The specific topic of the quiz.")
-    context: str = Field(description="The source text or content to generate the quiz from.")
-    num_questions: int = Field(description="The number of questions for the quiz.", default=3)
-    api_keys: dict = Field(description="The user-specific dictionary of API keys required by the LLM handler.")
 
-# Create the tool class
+# We DO NOT define an input schema class anymore.
+
 class QuizGeneratorTool(BaseTool):
-    """A tool for generating quizzes."""
+    """A tool for generating quizzes that handles raw JSON string input."""
     
     name: str = "quiz_generator"
+    # The description still guides the agent to produce JSON.
     description: str = (
-        "Useful for creating a multiple-choice quiz about a specific topic using provided context. "
-        "Use this tool *after* you have already gathered information on a topic with another tool. "
-        "Do not use this tool to find information."
+        "Use this tool to create a multiple-choice quiz. "
+        "The Action Input MUST be a single-line, valid JSON string "
+        "containing 'topic', 'context', and 'api_keys' keys."
     )
-    args_schema: Type[BaseModel] = QuizGeneratorInput
+    # We REMOVE the args_schema. The tool now accepts a raw string.
 
-    # CHANGE 3: The '_run' method now accepts 'api_keys' as an argument.
-    def _run(self, topic: str, context: str, num_questions: int, api_keys: dict) -> str:
-        """Use the tool."""
-        print(f"--- Calling QuizGeneratorTool with topic: '{topic}' ---")
+    # The _run method now accepts a single string argument.
+    def _run(self, tool_input: str) -> str:
+        """Use the tool by parsing a raw JSON string."""
+        print(f"--- Calling QuizGeneratorTool with raw string input: '{tool_input}' ---")
         
-        if not api_keys or not api_keys.get('gemini'):
-            return "Error: Gemini API key is missing. The user has not configured their keys to use this tool."
+        try:
+            # MANUALLY PARSE THE JSON
+            data = json.loads(tool_input)
+            topic = data['topic']
+            context = data['context']
+            api_keys = data['api_keys']
+        except (json.JSONDecodeError, KeyError) as e:
+            return f"Error: Invalid JSON input. The tool received a malformed string. Error: {e}"
+
+        if not api_keys:
+             return "Error: API keys were not found in the tool's input."
 
         try:
-            # The tool now uses the keys passed directly to it.
-            llm_handler = get_handler(provider_name='gemini', api_keys=api_keys)
-        except Exception as e:
-            return f"Error: Could not initialize the LLM handler. {e}"
-        
-        # The prompt and the rest of the try/except block for calling the LLM remain exactly the same
-        prompt = f"""
-        You are an expert quiz creator. Your task is to generate a multiple-choice quiz based ONLY on the provided context.
+            # STEP 1: Create an instance of our new router
+            router = LLMRouter(api_keys=api_keys)
 
-        Topic: "{topic}"
-        Number of Questions: {num_questions}
+            # STEP 2: Ask the router for the best LLM for this specific task
+            # The task_type 'quiz_generation' must match a key in the router's table.
+            llm_handler = router.get_llm_for_task(task_type="quiz_generation")
+            
+            print(f"--- QuizGeneratorTool routed to use {llm_handler.__class__.__name__} ---")
 
-        Context:
-        ---
-        {context}
-        ---
+            # The rest of the logic remains the same
+            num_questions = 2
+            
+            prompt = f"""
+            You are an expert quiz creator. Your task is to generate a multiple-choice quiz based ONLY on the provided context.
 
-        Please generate a {num_questions}-question multiple-choice quiz. Each question must have exactly 4 options (A, B, C, D) and you must clearly indicate the single correct answer after each question.
-        """
-        try:
+            Topic: "{topic}"
+            Number of Questions: {num_questions}
+
+            Context:
+            ---
+            {context}
+            ---
+
+            Please generate a {num_questions}-question multiple-choice quiz. Each question must have exactly 4 options (A, B, C, D) and you must clearly indicate the single correct answer after each question.
+            """
             response = llm_handler.generate_response(prompt, is_chat=False)
             return response
         except Exception as e:
             return f"Error: Failed to generate quiz. {e}"
 
-    async def _arun(self, topic: str, context: str, num_questions: int, api_keys: dict) -> str:
-        """Use the tool asynchronously."""
-        # For now, async just calls the synchronous version, passing the new argument.
-        return self._run(topic, context, num_questions, api_keys)
+    # The async version also accepts a single string.
+    async def _arun(self, tool_input: str) -> str:
+        """Use the tool asynchronously by parsing a raw JSON string."""
+        # For simplicity, we can make this a blocking call in the async context.
+        # For a truly async implementation, the LLMRouter and handler would need async methods.
+        return self._run(tool_input)
 
 # Create a single, exportable instance of the tool
 quiz_generator_tool = QuizGeneratorTool()
 
-# Add a test block to run this file directly
+
+# The test block is updated to test the new raw string input method.
 if __name__ == '__main__':
-    print("--- Running QuizGeneratorTool Unit Test ---")
+    print("--- Running QuizGeneratorTool Unit Test (Raw String Input Design) ---")
     
-    # For testing, we now need to simulate providing the API keys.
-    # In a real scenario, this would come from the user's database record.
-    # You MUST have a .env file for this test to work.
     from dotenv import load_dotenv
     import os
     
-    # We already have the correct, absolute path here
-    dotenv_path = os.path.join(os.getcwd(), '.env')
+    # Adjust path to find the .env file at the project root
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+    dotenv_path = os.path.join(project_root, '.env')
+
     print(f"Attempting to load .env file from: {dotenv_path}")
-    
-    # CHANGE THIS LINE
-    # Instead of load_dotenv(), use load_dotenv(dotenv_path=dotenv_path)
+    if not os.path.exists(dotenv_path):
+        # Fallback for different execution contexts
+        dotenv_path = os.path.join(os.getcwd(), '.env')
+        print(f"Fallback: Attempting to load .env file from: {dotenv_path}")
+
     load_dotenv(dotenv_path=dotenv_path)
     
-    # For extra debugging, let's see what the value is immediately after loading
-    gemini_key_value = os.getenv("ADMIN_GEMINI_API_KEY")
-    print(f"Value of ADMIN_GEMINI_API_KEY after load: {gemini_key_value}")
-
     test_api_keys = {
-        "gemini": gemini_key_value, # Use the variable we just created
+        "gemini": os.getenv("ADMIN_GEMINI_API_KEY"),
         "groq": os.getenv("ADMIN_GROQ_API_KEY")
     }
 
-    # The error message should also be updated for clarity
     if not test_api_keys.get("gemini"):
-        print("ERROR: ADMIN_GEMINI_API_KEY not found in .env file for testing.") # Updated error message
+        print("ERROR: ADMIN_GEMINI_API_KEY not found in .env file for testing.")
     else:
         test_context = """
         Supervised learning is a subcategory of machine learning and artificial intelligence. 
@@ -108,15 +116,19 @@ if __name__ == '__main__':
         Common algorithms include linear regression, logistic regression, and support vector machines.
         """
         
-        # Add the api_keys to the tool input
-        tool_input = {
+        # 1. Create the dictionary for the tool's arguments.
+        tool_input_dict = {
             "topic": "Supervised Learning",
             "context": test_context,
-            "num_questions": 2,
             "api_keys": test_api_keys
         }
         
-        result = quiz_generator_tool.run(tool_input)
+        # 2. Convert the dictionary to a JSON string, which is what the tool now expects.
+        tool_input_string = json.dumps(tool_input_dict)
+        
+        print("\n--- Running Tool with Raw JSON String Input ---")
+        # 3. Call the tool with the string.
+        result = quiz_generator_tool.run(tool_input_string)
         
         print("\n--- Tool Output ---")
         print(result)

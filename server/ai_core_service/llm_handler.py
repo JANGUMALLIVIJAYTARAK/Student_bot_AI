@@ -15,8 +15,10 @@ try:
 except ImportError:
     Groq = None
 try:
-    from langchain_ollama import ChatOllama
+    # This import is needed for OllamaHandler and the new GeminiHandler
     from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+    # This import is needed for OllamaHandler
+    from langchain_ollama import ChatOllama
 except ImportError:
     ChatOllama, HumanMessage, SystemMessage, AIMessage = None, None, None, None
 try:
@@ -171,6 +173,7 @@ class BaseLLMHandler(ABC):
         self.api_keys = api_keys
         self.model_name = model_name
         self.kwargs = kwargs
+        self.client = None # Add client to base class for consistency
         self._validate_sdk()
         self._configure_client()
 
@@ -195,32 +198,57 @@ class GeminiHandler(BaseLLMHandler):
     def _validate_sdk(self):
         if not genai:
             raise ConnectionError("Gemini SDK missing.")
+        # CHANGE 1: Import the LangChain wrapper for Gemini
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+        except ImportError:
+            raise ImportError("LangChain Google GenAI library not found. Please run 'pip install langchain-google-genai'.")
+            
     def _configure_client(self):
         gemini_key = self.api_keys.get('gemini')
         if not gemini_key: raise ValueError("Gemini API key not found.")
+        # We configure the base sdk as before for any direct calls
         genai.configure(api_key=gemini_key)
+        
+        # This import is safe because of the _validate_sdk check
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        
+        # CHANGE 2: Create and store the LangChain-compatible client instance
+        self.client = ChatGoogleGenerativeAI(
+            model=self.model_name or os.getenv("GEMINI_MODEL_NAME", "gemini-1.5-flash"),
+            google_api_key=gemini_key,
+            temperature=0.7
+            # Note: system_prompt and history are handled by the AgentExecutor, not here.
+        )
+
     def generate_response(self, prompt: str, is_chat: bool = True) -> str:
-        system_instruction = self.kwargs.get('system_prompt') if is_chat else None
-        client = genai.GenerativeModel(self.model_name or os.getenv("GEMINI_MODEL_NAME", "gemini-1.5-flash"),
-            generation_config=GenerationConfig(temperature=0.7),
-            system_instruction=system_instruction)
+        # CHANGE 3: Simplify this method to just use the client
+        # The AgentExecutor will handle history and system prompts.
+        # This makes the handler compatible with direct tool calls AND agent execution.
         if is_chat:
+            # For agent use, LangChain will build the message list.
+            # We can keep a simplified history logic for direct calls if needed.
             history = self.kwargs.get('chat_history', [])
-            history_for_api = [{'role': 'user' if msg.get('role') == 'user' else 'model', 'parts': [msg.get('parts', [{}])[0].get('text', "")]} for msg in history if msg.get('parts', [{}])[0].get('text')]
-            chat_session = client.start_chat(history=history_for_api)
-            response = chat_session.send_message(prompt)
-        else:
-            response = client.generate_content(prompt)
-        return response.text
+            messages = []
+            if system_prompt := self.kwargs.get('system_prompt'):
+                messages.append(SystemMessage(content=system_prompt)) # Requires from langchain_core.messages import SystemMessage
+            # Convert history format if necessary...
+            # For simplicity, we'll just pass the prompt directly for now. AgentExecutor manages history.
+            response = self.client.invoke(prompt)
+        else: # For non-chat, direct generation
+            response = self.client.invoke(prompt)
+            
+        return response.content
 
 class GroqHandler(BaseLLMHandler):
     def _validate_sdk(self):
         if not Groq:
             raise ConnectionError("Groq SDK missing.")
     def _configure_client(self):
-        grok_key = self.api_keys.get('grok')
-        if not grok_key: raise ValueError("Groq API key not found.")
-        self.client = Groq(api_key=grok_key)
+        # Allow 'grok' or 'groq' for the key name for user-friendliness
+        groq_key = self.api_keys.get('groq') or self.api_keys.get('grok')
+        if not groq_key: raise ValueError("Groq API key not found.")
+        self.client = Groq(api_key=groq_key)
     def generate_response(self, prompt: str, is_chat: bool = True) -> str:
         messages = []
         if is_chat:

@@ -56,3 +56,7 @@ langchain-groq
 google-generativeai
 langchain-google-genai
 # pip install --upgrade langchain langchain-community
+
+# pip install pymongo python-docx PyMuPDF python-pptx
+
+# pip install transformers datasets peft accelerate bitsandbytes torch trl
